@@ -58,30 +58,25 @@ func truncate(s string, maxChars int) string {
 
 const iterations = 10000
 
-type stats struct {
-	insertCount int
-	findCount   int
-}
-
 func TestInsertAndFetch(t *testing.T) {
 
 	tree, err := New(1)
 	assert.NoError(t, err)
 	assert.NotNil(t, tree)
 	rand.Seed(time.Now().Unix())
-	words := make(map[string]stats)
+	words := make(map[string]struct{})
 	// Make sure our insertion always works
 	for i := 0; i < iterations; i++ {
 		word := randString()
 		if _, ok := words[word]; !ok {
-			words[word] = stats{insertCount: 0, findCount: 0}
+			words[word] = struct{}{}
 			err := tree.Insert(word, 0)
 			assert.NoError(t, err)
 
 		} else {
 			_, found := tree.Find(word)
 			assert.True(t, found)
-			words[word] = stats{insertCount: words[word].insertCount, findCount: words[word].findCount + 1}
+			words[word] = struct{}{}
 		}
 	}
 
@@ -112,13 +107,32 @@ func TestInsertAndFetch(t *testing.T) {
 }
 
 func BenchmarkInsert(b *testing.B) {
-
+	b.ReportAllocs()
 	tree, err := New(1)
 	assert.NoError(b, err)
 	assert.NotNil(b, tree)
 	for i := 0; i < b.N; i++ {
-		err := tree.Insert(randString(), 0)
-		assert.NoError(b, err)
+		_ = tree.Insert(randString(), 0)
 	}
+}
 
+func BenchmarkInsertAndFind(b *testing.B) {
+	b.ReportAllocs()
+	tree, err := New(1)
+	assert.NoError(b, err)
+	assert.NotNil(b, tree)
+	for i := 0; i < b.N; i++ {
+		s := randString()
+		_ = tree.Insert(s, 0)
+		_, _ = tree.Find(s)
+
+	}
+}
+
+func BenchmarkMap(b *testing.B) {
+	b.ReportAllocs()
+	words := make(map[string]node)
+	for i := 0; i < b.N; i++ {
+		words[randString()] = node{Values: make([]int, 1, 1)}
+	}
 }
