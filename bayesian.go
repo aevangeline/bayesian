@@ -4,6 +4,8 @@ package bayesian
 import (
 	"math/big"
 
+	"errors"
+
 	"github.com/LegoRemix/bayesian/internal/radix"
 )
 
@@ -12,19 +14,43 @@ type Classifier interface {
 	Learn(doc []string, category int) error
 }
 
+const Positive = 0
+const Negative = 1
+
+type BinaryClassifier interface {
+	Scores(doc []string) ([]*big.Float, int, bool)
+	LearnPositive(doc []string) error
+	LearnNegative(doc []string) error
+}
+
 type classifier struct {
 	tree            radix.Tree
 	smoothingFactor float64
 }
 
-// New creates a new instance of a boolean classifier
-func New(categories int, smoothingFactor float64) (Classifier, error) {
+var ErrInvalidSmoothingFactor = errors.New("bayesian: invalid smoothing factor")
+
+func newClassifier(categories int, smoothingFactor float64) (*classifier, error) {
 	tree, err := radix.New(categories)
 	if err != nil {
 		return nil, err
 	}
 
+	if smoothingFactor < 0 {
+		return nil, ErrInvalidSmoothingFactor
+	}
+
 	return &classifier{tree: tree, smoothingFactor: smoothingFactor}, nil
+}
+
+// NewClassifier creates a new instance of a bayesian with n classes classifier
+func NewClassifier(categories int, smoothingFactor float64) (Classifier, error) {
+	return newClassifier(categories, smoothingFactor)
+}
+
+// NewBinaryClassifier creates a new bayesian classifier with two classes
+func NewBinaryClassifier(smoothingFactor float64) (BinaryClassifier, error) {
+	return newClassifier(2, smoothingFactor)
 }
 
 func (c *classifier) getCategoryProbs(text string) []float64 {
@@ -78,17 +104,17 @@ func (c *classifier) Scores(doc []string) ([]*big.Float, int, bool) {
 	for _, word := range doc {
 		wordProbs := c.getCategoryProbs(word)
 		for i, prob := range wordProbs {
-			scores[i] = scores[i].Mul(scores[i], big.NewFloat(prob))
+			scores[i].Mul(scores[i], big.NewFloat(prob))
 		}
 	}
 
 	sum := big.NewFloat(0.0)
 	for _, score := range scores {
-		sum = sum.Add(sum, score)
+		sum.Add(sum, score)
 	}
 
 	for i := range scores {
-		scores[i] = scores[i].Quo(scores[i], sum)
+		scores[i].Quo(scores[i], sum)
 	}
 
 	idx, strict := findMax(scores)
@@ -100,7 +126,7 @@ func findMax(scores []*big.Float) (int, bool) {
 	idx := 0
 	strict := true
 	for i := 1; i < len(scores); i++ {
-		if scores[idx].Cmp(scores[i]) > 0 {
+		if scores[idx].Cmp(scores[i]) < 0 {
 			idx = i
 			strict = true
 		} else if scores[idx].Cmp(scores[i]) == 0 {
@@ -120,4 +146,14 @@ func (c *classifier) Learn(doc []string, category int) error {
 	}
 
 	return nil
+}
+
+// LearnPositive learns something for the binaryClassifier as positive
+func (c *classifier) LearnPositive(doc []string) error {
+	return c.Learn(doc, Positive)
+}
+
+// LearnNegative learns something for the binaryClassifier as negative
+func (c *classifier) LearnNegative(doc []string) error {
+	return c.Learn(doc, Negative)
 }
