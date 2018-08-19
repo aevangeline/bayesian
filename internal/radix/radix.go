@@ -116,7 +116,7 @@ func (r *root) UniqueWords() int {
 }
 
 func longestCommonPrefix(left, right string) string {
-	if utf8.RuneCountInString(left) > utf8.RuneCountInString(right) {
+	if len(left) > len(right) {
 		temp := left
 		left = right
 		right = temp
