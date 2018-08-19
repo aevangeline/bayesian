@@ -16,8 +16,8 @@ type Classifier interface {
 	Learn(doc []string, category int) error
 }
 
-const Positive = 0
-const Negative = 1
+const Positive = 1
+const Negative = 0
 
 type BinaryClassifier interface {
 	Scores(doc []string) ([]*big.Float, int, bool)
