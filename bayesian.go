@@ -6,6 +6,8 @@ import (
 
 	"errors"
 
+	"encoding/gob"
+
 	"github.com/LegoRemix/bayesian/internal/radix"
 )
 
@@ -24,11 +26,15 @@ type BinaryClassifier interface {
 }
 
 type classifier struct {
-	tree            radix.Tree
-	smoothingFactor float64
+	Tree            radix.Tree
+	SmoothingFactor float64
 }
 
 var ErrInvalidSmoothingFactor = errors.New("bayesian: invalid smoothing factor")
+
+func init() {
+	gob.Register(&classifier{})
+}
 
 func newClassifier(categories int, smoothingFactor float64) (*classifier, error) {
 	tree, err := radix.New(categories)
@@ -40,7 +46,7 @@ func newClassifier(categories int, smoothingFactor float64) (*classifier, error)
 		return nil, ErrInvalidSmoothingFactor
 	}
 
-	return &classifier{tree: tree, smoothingFactor: smoothingFactor}, nil
+	return &classifier{Tree: tree, SmoothingFactor: smoothingFactor}, nil
 }
 
 // NewClassifier creates a new instance of a bayesian with n classes classifier
@@ -54,21 +60,21 @@ func NewBinaryClassifier(smoothingFactor float64) (BinaryClassifier, error) {
 }
 
 func (c *classifier) getCategoryProbs(text string) []float64 {
-	if c.tree.UniqueWords() == 0 {
-		return make([]float64, c.tree.CategoryCount(), c.tree.CategoryCount())
+	if c.Tree.UniqueWords() == 0 {
+		return make([]float64, c.Tree.CategoryCount(), c.Tree.CategoryCount())
 	}
 
-	uniqueWords := float64(c.tree.UniqueWords())
-	counts, seen := c.tree.Find(text)
+	uniqueWords := float64(c.Tree.UniqueWords())
+	counts, seen := c.Tree.Find(text)
 	if !seen {
 		// if we have not seen this word, we try to smooth
-		counts = make([]int, c.tree.CategoryCount(), c.tree.CategoryCount())
+		counts = make([]int, c.Tree.CategoryCount(), c.Tree.CategoryCount())
 	}
 
 	var probs []float64
 	for i := range counts {
-		numer := float64(counts[i]) + c.smoothingFactor
-		denom := float64(c.tree.GetTotals()[i]) + c.smoothingFactor*uniqueWords
+		numer := float64(counts[i]) + c.SmoothingFactor
+		denom := float64(c.Tree.GetTotals()[i]) + c.SmoothingFactor*uniqueWords
 		probs = append(probs, numer/denom)
 	}
 
@@ -78,7 +84,7 @@ func (c *classifier) getCategoryProbs(text string) []float64 {
 func (c *classifier) getPriors() []float64 {
 	sum := float64(0)
 	var priors []float64
-	for _, value := range c.tree.GetTotals() {
+	for _, value := range c.Tree.GetTotals() {
 		total := float64(value)
 		sum += total
 		priors = append(priors, total)
@@ -139,7 +145,7 @@ func findMax(scores []*big.Float) (int, bool) {
 // Learn learns all of the words in a given document as members of a given category
 func (c *classifier) Learn(doc []string, category int) error {
 	for _, fragment := range doc {
-		err := c.tree.Insert(fragment, category)
+		err := c.Tree.Insert(fragment, category)
 		if err != nil {
 			return err
 		}

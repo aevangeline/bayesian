@@ -2,6 +2,7 @@
 package radix
 
 import (
+	"encoding/gob"
 	"errors"
 	"sort"
 	"strings"
@@ -16,27 +17,28 @@ type Tree interface {
 	UniqueWords() int
 }
 
-type radixRoot struct {
-	numCategories  int
-	categoryTotals []int
-	uniqueWords    int
-	root           *radixNode
+type root struct {
+	NumCategories    int
+	CategoryTotals   []int
+	UniqueWordsCount int
+	Root             *node
 }
 
-type radixChild struct {
-	prefix string
-	node   *radixNode
+type child struct {
+	Prefix string
+	Node   *node
 }
 
-type radixNode struct {
-	values   []int
-	isLeaf   bool
-	children []radixChild
+type node struct {
+	Values   []int
+	IsLeaf   bool
+	Children []child
 }
 
 var ErrOutOfBoundsCategory = errors.New("radix: out of bounds category")
 var ErrInvalidCategoryCount = errors.New("radix: invalid category count")
 var ErrNoSuchNode = errors.New("radix: no such node")
+var ErrCannotCreateNode = errors.New("radix: no node created")
 
 type matchType string
 
@@ -54,60 +56,62 @@ func New(numCategories int) (Tree, error) {
 		return nil, ErrInvalidCategoryCount
 	}
 
-	return &radixRoot{
-		numCategories:  numCategories,
-		categoryTotals: make([]int, numCategories, numCategories),
-		root:           &radixNode{isLeaf: false, values: make([]int, numCategories, numCategories)},
+	return &root{
+		NumCategories:  numCategories,
+		CategoryTotals: make([]int, numCategories, numCategories),
+		Root:           &node{IsLeaf: false, Values: make([]int, numCategories, numCategories)},
 	}, nil
 }
 
 // Insert creates or finds a node representing this string in this radix tree and increments the category
-func (r *radixRoot) Insert(needle string, category int) error {
-	if category >= r.numCategories {
+func (r *root) Insert(needle string, category int) error {
+	if category >= r.NumCategories {
 		return ErrOutOfBoundsCategory
 	}
 
 	node, isNew := r.findOrCreate(needle)
 	if node != nil {
-		if node.values == nil {
-			node.values = make([]int, r.numCategories, r.numCategories)
+		if node.Values == nil {
+			node.Values = make([]int, r.NumCategories, r.NumCategories)
 		}
 
-		node.values[category] += 1
+		node.Values[category] += 1
 
 		if isNew {
-			r.uniqueWords += 1
+			r.UniqueWordsCount += 1
 		}
 
-		r.categoryTotals[category] += 1
+		r.CategoryTotals[category] += 1
+
+		return nil
 	}
 
-	return nil
+	return ErrCannotCreateNode
 }
 
 // Find gets the category values associated with a given string
-func (r *radixRoot) Find(needle string) ([]int, bool) {
+func (r *root) Find(needle string) ([]int, bool) {
 	node := r.find(needle)
 	if node == nil {
 		return nil, false
 	}
 
-	return node.values, true
+	return node.Values, true
 }
 
 // GetTotals fetches the totals associated with each category
-func (r *radixRoot) GetTotals() []int {
-	return r.categoryTotals
+func (r *root) GetTotals() []int {
+	return r.CategoryTotals
 }
 
 // CategoryCount returns the number of categories we are tracking in this tree
-func (r *radixRoot) CategoryCount() int {
-	return r.numCategories
+func (r *root) CategoryCount() int {
+	return r.NumCategories
 }
 
 // UniqueWords returns the number of words represented in this trie
-func (r *radixRoot) UniqueWords() int {
-	return r.uniqueWords
+func (r *root) UniqueWords() int {
+	return r.UniqueWordsCount
 }
 
 func longestCommonPrefix(left, right string) string {
@@ -129,7 +133,11 @@ func longestCommonPrefix(left, right string) string {
 	return shared
 }
 
-func searchChildren(children []radixChild, needle string) (int, matchType, string) {
+func init() {
+	gob.Register(&root{})
+}
+
+func searchChildren(children []child, needle string) (int, matchType, string) {
 	// here we handle the degenerate case of no children to make the rest of the function simpler
 	numLeaves := len(children)
 	if numLeaves == 0 {
@@ -137,16 +145,16 @@ func searchChildren(children []radixChild, needle string) (int, matchType, strin
 	}
 
 	idx := sort.Search(len(children), func(i int) bool {
-		return children[i].prefix >= needle
+		return children[i].Prefix >= needle
 	})
 
 	if idx < numLeaves {
 		// here we handle getting an exact match
-		if children[idx].prefix == needle {
+		if children[idx].Prefix == needle {
 			return idx, exact, needle
 		}
 
-		lcp := longestCommonPrefix(children[idx].prefix, needle)
+		lcp := longestCommonPrefix(children[idx].Prefix, needle)
 		// if it's not an exact match, it might be a strict super string
 		if lcp == needle {
 			return idx, super, lcp
@@ -160,10 +168,10 @@ func searchChildren(children []radixChild, needle string) (int, matchType, strin
 		return 0, nomatch, ""
 	}
 
-	lcp := longestCommonPrefix(children[idx-1].prefix, needle)
+	lcp := longestCommonPrefix(children[idx-1].Prefix, needle)
 
 	// if it is a substring, then report that to the user
-	if lcp == children[idx-1].prefix {
+	if lcp == children[idx-1].Prefix {
 		return idx - 1, substring, lcp
 	} else if lcp != "" {
 		return idx - 1, shared_prefix, lcp
@@ -174,22 +182,22 @@ func searchChildren(children []radixChild, needle string) (int, matchType, strin
 }
 
 // findNode searches through the tree and finds the node that represents this string, if it exists
-func (r *radixRoot) find(needle string) *radixNode {
-	current := r.root
+func (r *root) find(needle string) *node {
+	current := r.Root
 	remainder := needle
 
 	// we loop until we either find the correct node, or we definitively cannot find it
 	for {
 		if remainder == "" {
-			if current.isLeaf {
+			if current.IsLeaf {
 				return current
 			}
 			return nil
 		}
 
-		idx, match, lcp := searchChildren(current.children, remainder)
+		idx, match, lcp := searchChildren(current.Children, remainder)
 		if match == exact || match == substring {
-			current = current.children[idx].node
+			current = current.Children[idx].Node
 			remainder = strings.TrimPrefix(remainder, lcp)
 		} else {
 			return nil
@@ -198,56 +206,56 @@ func (r *radixRoot) find(needle string) *radixNode {
 }
 
 // inserts a new leaf at the specified index
-func insertChild(children []radixChild, newLeaf radixChild, idx int) []radixChild {
-	children = append(children, radixChild{})
+func insertChild(children []child, newLeaf child, idx int) []child {
+	children = append(children, child{})
 	copy(children[idx+1:], children[idx:])
 	children[idx] = newLeaf
 	return children
 }
 
 // findOrCreate returns either an existing node representing the string, or creates a new one, the bool reports whether the node is new
-func (r *radixRoot) findOrCreate(needle string) (*radixNode, bool) {
-	current := r.root
+func (r *root) findOrCreate(needle string) (*node, bool) {
+	current := r.Root
 	remainder := needle
 	// we loop until we find either a node where we need to insert our string, or a node that already represents it
 	for {
 		if remainder == "" {
-			current.isLeaf = true
+			current.IsLeaf = true
 			return current, false
 		}
-		idx, match, lcp := searchChildren(current.children, remainder)
+		idx, match, lcp := searchChildren(current.Children, remainder)
 		// if we find an exact match for the key, or just a substring prefix, we just keep looping
 		if match == exact || match == substring {
-			current = current.children[idx].node
+			current = current.Children[idx].Node
 			remainder = strings.TrimPrefix(remainder, lcp)
 
 		} else if match == shared_prefix {
 			// if there's a shared prefix, we replace the prefix on the child with the lcp and then add children for those
-			previousKey := current.children[idx].prefix
+			previousKey := current.Children[idx].Prefix
 			// compute the suffixes for the new nodes
 			oldNodeKey := strings.TrimPrefix(previousKey, lcp)
-			needleKey := strings.TrimPrefix(needle, lcp)
+			remainderKey := strings.TrimPrefix(remainder, lcp)
 
 			// pull out the nodes we will have for our new radix nodes
-			oldNode := current.children[idx].node
-			newNode := &radixNode{isLeaf: true}
+			oldNode := current.Children[idx].Node
+			newNode := &node{IsLeaf: true}
 
 			// sort the children of the new super node
-			newChildren := []radixChild{{prefix: oldNodeKey, node: oldNode}, {prefix: needleKey, node: newNode}}
+			newChildren := []child{{Prefix: oldNodeKey, Node: oldNode}, {Prefix: remainderKey, Node: newNode}}
 			sort.Slice(newChildren, func(i int, j int) bool {
-				return newChildren[i].prefix < newChildren[j].prefix
+				return newChildren[i].Prefix < newChildren[j].Prefix
 			})
-			current.children[idx] = radixChild{prefix: lcp, node: &radixNode{children: newChildren}}
+			current.Children[idx] = child{Prefix: lcp, Node: &node{Children: newChildren}}
 			return newNode, true
 		} else if match == super {
-			suffix := strings.TrimPrefix(current.children[idx].prefix, lcp)
-			newNode := &radixNode{isLeaf: true, children: []radixChild{{prefix: suffix, node: current.children[idx].node}}}
-			current.children[idx] = radixChild{prefix: lcp, node: newNode}
+			suffix := strings.TrimPrefix(current.Children[idx].Prefix, lcp)
+			newNode := &node{IsLeaf: true, Children: []child{{Prefix: suffix, Node: current.Children[idx].Node}}}
+			current.Children[idx] = child{Prefix: lcp, Node: newNode}
 			return newNode, true
 		} else {
-			newNode := &radixNode{isLeaf: true}
+			newNode := &node{IsLeaf: true}
 			// if there's no match, we just insert the child in sorted order
-			current.children = insertChild(current.children, radixChild{prefix: remainder, node: newNode}, idx)
+			current.Children = insertChild(current.Children, child{Prefix: remainder, Node: newNode}, idx)
 			return newNode, true
 		}
 	}
