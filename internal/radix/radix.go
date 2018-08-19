@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Tree represents how we can interface with our specialized radix tree
@@ -115,22 +116,24 @@ func (r *root) UniqueWords() int {
 }
 
 func longestCommonPrefix(left, right string) string {
-	shorter := []rune(left)
-	longer := []rune(right)
-	if len(longer) < len(shorter) {
-		temp := shorter
-		shorter = longer
-		longer = temp
-	}
-	shared := ""
-	for i := range shorter {
-		if shorter[i] != longer[i] {
-			break
-		}
-		shared += string(shorter[i])
+	if len(left) > len(right) {
+		temp := left
+		left = right
+		right = temp
 	}
 
-	return shared
+	end := 0
+	for i, r := range left {
+		other, width := utf8.DecodeRuneInString(right[i:])
+		if other == r {
+			end = i + width
+		} else {
+			break
+		}
+
+	}
+
+	return left[:end]
 }
 
 func init() {
