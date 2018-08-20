@@ -36,19 +36,23 @@ type node struct {
 	Children []child
 }
 
+// ErrOutOfBoundsCategory is an errror for when the category we want to increment is out of bounds
 var ErrOutOfBoundsCategory = errors.New("radix: out of bounds category")
+
+// ErrInvalidCategoryCount is an error for when the number of categories this tree should count is invalid
 var ErrInvalidCategoryCount = errors.New("radix: invalid category count")
-var ErrNoSuchNode = errors.New("radix: no such node")
+
+// ErrCannotCreateNode is an error we get when insert somehow fails
 var ErrCannotCreateNode = errors.New("radix: no node created")
 
 type matchType string
 
 const (
-	nomatch       matchType = "nomatch"       // nomatch means that there is no match
-	shared_prefix matchType = "shared_prefix" // means that the there is a non-empty shared prefix between these numbers
-	substring     matchType = "substring"     // substring means that this match is substring of the needle
-	exact         matchType = "exact"         // exact means that this search result is an exact match for the needle
-	super         matchType = "super"         // super means that this search result is a super string of the needle
+	nomatch      matchType = "nomatch"      // nomatch means that there is no match
+	sharedPrefix matchType = "sharedPrefix" // means that the there is a non-empty shared prefix between these numbers
+	substring    matchType = "substring"    // substring means that this match is substring of the needle
+	exact        matchType = "exact"        // exact means that this search result is an exact match for the needle
+	super        matchType = "super"        // super means that this search result is a super string of the needle
 )
 
 // New creates a new instance of a radix tree
@@ -76,13 +80,13 @@ func (r *root) Insert(needle string, category int) error {
 			node.Values = make([]int, r.NumCategories, r.NumCategories)
 		}
 
-		node.Values[category] += 1
+		node.Values[category]++
 
 		if isNew {
-			r.UniqueWordsCount += 1
+			r.UniqueWordsCount++
 		}
 
-		r.CategoryTotals[category] += 1
+		r.CategoryTotals[category]++
 
 		return nil
 	}
@@ -162,7 +166,7 @@ func searchChildren(children []child, needle string) (int, matchType, string) {
 		if lcp == needle {
 			return idx, super, lcp
 		} else if lcp != "" {
-			return idx, shared_prefix, lcp
+			return idx, sharedPrefix, lcp
 		}
 	}
 
@@ -177,14 +181,14 @@ func searchChildren(children []child, needle string) (int, matchType, string) {
 	if lcp == children[idx-1].Prefix {
 		return idx - 1, substring, lcp
 	} else if lcp != "" {
-		return idx - 1, shared_prefix, lcp
+		return idx - 1, sharedPrefix, lcp
 	}
 	// otherwise we have no match
 	return idx, nomatch, ""
 
 }
 
-// findNode searches through the tree and finds the node that represents this string, if it exists
+// find searches through the tree and finds the node that represents this string, if it exists
 func (r *root) find(needle string) *node {
 	current := r.Root
 	remainder := needle
@@ -232,7 +236,7 @@ func (r *root) findOrCreate(needle string) (*node, bool) {
 			current = current.Children[idx].Node
 			remainder = strings.TrimPrefix(remainder, lcp)
 
-		} else if match == shared_prefix {
+		} else if match == sharedPrefix {
 			// if there's a shared prefix, we replace the prefix on the child with the lcp and then add children for those
 			previousKey := current.Children[idx].Prefix
 			// compute the suffixes for the new nodes
@@ -255,11 +259,11 @@ func (r *root) findOrCreate(needle string) (*node, bool) {
 			newNode := &node{IsLeaf: true, Children: []child{{Prefix: suffix, Node: current.Children[idx].Node}}}
 			current.Children[idx] = child{Prefix: lcp, Node: newNode}
 			return newNode, true
-		} else {
-			newNode := &node{IsLeaf: true}
-			// if there's no match, we just insert the child in sorted order
-			current.Children = insertChild(current.Children, child{Prefix: remainder, Node: newNode}, idx)
-			return newNode, true
 		}
+		newNode := &node{IsLeaf: true}
+		// if there's no match, we just insert the child in sorted order
+		current.Children = insertChild(current.Children, child{Prefix: remainder, Node: newNode}, idx)
+		return newNode, true
+
 	}
 }

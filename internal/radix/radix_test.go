@@ -27,7 +27,7 @@ func TestSearchLeaves(t *testing.T) {
 	assert.Equal(t, "sl", lcp)
 	idx, match, lcp = searchChildren(children, "cab")
 	assert.Equal(t, 2, idx)
-	assert.Equal(t, shared_prefix, match)
+	assert.Equal(t, sharedPrefix, match)
 	assert.Equal(t, "ca", lcp)
 	idx, match, lcp = searchChildren(children, "banana")
 	assert.Equal(t, 1, idx)

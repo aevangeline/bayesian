@@ -16,9 +16,16 @@ func TestBinaryClassifier(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 
-	err = c.LearnPositive([]string{"spam", "spam", "spam", "spam", "spam", "spam", "ham", "apple", "cake", "taco", "app", "cat", "medicine", "medical", "dogged"})
+	_ = c.LearnPositive([]string{"spam", "spam", "spam", "spam",
+		"spam", "spam", "ham", "apple", "cake",
+		"taco", "app", "cat", "medicine",
+		"medical", "dogged"})
+
 	assert.NoError(t, err)
-	err = c.LearnNegative([]string{"ham", "ham", "ham", "ham", "ham", "spam", "apple", "cake", "app", "dog", "rat", "bat", "rake", "dogged", "bothered"})
+	_ = c.LearnNegative([]string{"ham", "ham", "ham", "ham",
+		"ham", "spam", "apple", "cake", "app",
+		"dog", "rat", "bat", "rake", "dogged", "bothered"})
+
 	_, idx, _ := c.Scores([]string{"spam"})
 	assert.Equal(t, Positive, idx)
 
@@ -43,12 +50,16 @@ func TestEncodeDecode(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, c)
 
-	err = c.LearnPositive([]string{"spam", "spam", "spam", "spam", "spam",
-		"spam", "ham", "apple", "cake", "taco", "app", "cat", "medicine", "medical", "dogged"})
+	err = c.LearnPositive([]string{"spam", "spam",
+		"spam", "spam", "spam",
+		"spam", "ham", "apple", "cake", "taco",
+		"app", "cat", "medicine", "medical", "dogged"})
 
 	assert.NoError(t, err)
-	err = c.LearnNegative([]string{"ham", "ham", "ham", "ham", "ham", "spam", "apple",
-		"cake", "app", "dog", "rat", "bat", "rake", "dogged", "bothered"})
+	err = c.LearnNegative([]string{"ham", "ham", "ham",
+		"ham", "ham", "spam", "apple",
+		"cake", "app", "dog", "rat", "bat",
+		"rake", "dogged", "bothered"})
 
 	assert.NoError(t, err)
 

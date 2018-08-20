@@ -11,14 +11,19 @@ import (
 	"github.com/LegoRemix/bayesian/internal/radix"
 )
 
+// Classifier is an interface to a general multi-class bayesian classifier
 type Classifier interface {
 	Scores(doc []string) ([]*big.Float, int, bool)
 	Learn(doc []string, category int) error
 }
 
+// Positive represents the positive category in a binary classifier
 const Positive = 1
+
+// Negative represents the negative category in a binary classifier
 const Negative = 0
 
+// BinaryClassifier is an interface to a simple bayesian binary classifier
 type BinaryClassifier interface {
 	Scores(doc []string) ([]*big.Float, int, bool)
 	LearnPositive(doc []string) error
@@ -30,6 +35,7 @@ type classifier struct {
 	SmoothingFactor float64
 }
 
+// ErrInvalidSmoothingFactor is an error we throw when the smoothing factor provided is less than 0
 var ErrInvalidSmoothingFactor = errors.New("bayesian: invalid smoothing factor")
 
 func init() {
