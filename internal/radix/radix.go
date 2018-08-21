@@ -259,11 +259,12 @@ func (r *root) findOrCreate(needle string) (*node, bool) {
 			newNode := &node{IsLeaf: true, Children: []child{{Prefix: suffix, Node: current.Children[idx].Node}}}
 			current.Children[idx] = child{Prefix: lcp, Node: newNode}
 			return newNode, true
+		} else {
+			newNode := &node{IsLeaf: true}
+			// if there's no match, we just insert the child in sorted order
+			current.Children = insertChild(current.Children, child{Prefix: remainder, Node: newNode}, idx)
+			return newNode, true
 		}
-		newNode := &node{IsLeaf: true}
-		// if there's no match, we just insert the child in sorted order
-		current.Children = insertChild(current.Children, child{Prefix: remainder, Node: newNode}, idx)
-		return newNode, true
 
 	}
 }
